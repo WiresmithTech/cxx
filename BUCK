@@ -1,7 +1,10 @@
 rust_library(
     name = "cxx",
     srcs = glob(["src/**/*.rs"]),
-    edition = "2018",
+    doc_deps = [
+        ":cxx-build",
+    ],
+    edition = "2021",
     features = [
         "alloc",
         "std",
@@ -9,19 +12,24 @@ rust_library(
     visibility = ["PUBLIC"],
     deps = [
         ":core",
-        ":macro",
+        ":cxxbridge-macro",
+        "//third-party:foldhash",
     ],
 )
 
-rust_binary(
+alias(
     name = "codegen",
+    actual = ":cxxbridge",
+    visibility = ["PUBLIC"],
+)
+
+rust_binary(
+    name = "cxxbridge",
     srcs = glob(["gen/cmd/src/**/*.rs"]) + [
         "gen/cmd/src/gen",
         "gen/cmd/src/syntax",
     ],
-    crate = "cxxbridge",
-    edition = "2018",
-    visibility = ["PUBLIC"],
+    edition = "2021",
     deps = [
         "//third-party:clap",
         "//third-party:codespan-reporting",
@@ -37,36 +45,36 @@ cxx_library(
     exported_headers = {
         "cxx.h": "include/cxx.h",
     },
-    exported_linker_flags = ["-lstdc++"],
     header_namespace = "rust",
+    preferred_linkage = "static",
     visibility = ["PUBLIC"],
 )
 
 rust_library(
-    name = "macro",
+    name = "cxxbridge-macro",
     srcs = glob(["macro/src/**/*.rs"]) + ["macro/src/syntax"],
-    crate = "cxxbridge_macro",
-    edition = "2018",
+    doctests = False,
+    edition = "2021",
     proc_macro = True,
     deps = [
         "//third-party:proc-macro2",
         "//third-party:quote",
+        "//third-party:rustversion",
         "//third-party:syn",
     ],
 )
 
 rust_library(
-    name = "build",
+    name = "cxx-build",
     srcs = glob(["gen/build/src/**/*.rs"]) + [
         "gen/build/src/gen",
         "gen/build/src/syntax",
     ],
-    edition = "2018",
-    visibility = ["PUBLIC"],
+    doctests = False,
+    edition = "2021",
     deps = [
         "//third-party:cc",
         "//third-party:codespan-reporting",
-        "//third-party:once_cell",
         "//third-party:proc-macro2",
         "//third-party:quote",
         "//third-party:scratch",
@@ -75,12 +83,12 @@ rust_library(
 )
 
 rust_library(
-    name = "lib",
+    name = "cxx-gen",
     srcs = glob(["gen/lib/src/**/*.rs"]) + [
         "gen/lib/src/gen",
         "gen/lib/src/syntax",
     ],
-    edition = "2018",
+    edition = "2021",
     visibility = ["PUBLIC"],
     deps = [
         "//third-party:cc",
