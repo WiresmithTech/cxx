@@ -13,7 +13,7 @@ impl ToTokens for Type {
             Type::Ident(ident) => {
                 if ident.rust == Char {
                     let span = ident.rust.span();
-                    tokens.extend(quote_spanned!(span=> ::cxx::private::));
+                    tokens.extend(quote_spanned!(span=> ::cxx::core::ffi::));
                 } else if ident.rust == CxxString {
                     let span = ident.rust.span();
                     tokens.extend(quote_spanned!(span=> ::cxx::));
@@ -270,7 +270,7 @@ impl ToTokens for Signature {
             args.to_tokens(tokens);
         });
         if let Some(ret) = ret {
-            Token![->](paren_token.span).to_tokens(tokens);
+            Token![->](paren_token.span.join()).to_tokens(tokens);
             if let Some((result, langle, rangle)) = throws_tokens {
                 result.to_tokens(tokens);
                 langle.to_tokens(tokens);
@@ -280,7 +280,7 @@ impl ToTokens for Signature {
                 ret.to_tokens(tokens);
             }
         } else if let Some((result, langle, rangle)) = throws_tokens {
-            Token![->](paren_token.span).to_tokens(tokens);
+            Token![->](paren_token.span.join()).to_tokens(tokens);
             result.to_tokens(tokens);
             langle.to_tokens(tokens);
             token::Paren(langle.span).surround(tokens, |_| ());

@@ -1,2 +1,2 @@
-/.cargo
-/vendor
+/target/
+/vendor/
