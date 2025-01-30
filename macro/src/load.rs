@@ -18,7 +18,7 @@ use syn::{parse_quote, Path};
 
 const CXX_CLANG_AST: &str = "CXX_CLANG_AST";
 
-pub fn load(cx: &mut Errors, apis: &mut [Api]) {
+pub(crate) fn load(cx: &mut Errors, apis: &mut [Api]) {
     let ref mut variants_from_header = Vec::new();
     for api in apis {
         if let Api::Enum(enm) = api {
@@ -36,7 +36,7 @@ pub fn load(cx: &mut Errors, apis: &mut [Api]) {
         }
     }
 
-    let span = match variants_from_header.get(0) {
+    let span = match variants_from_header.first() {
         None => return,
         Some(enm) => enm.variants_from_header_attr.clone().unwrap(),
     };
@@ -60,7 +60,7 @@ pub fn load(cx: &mut Errors, apis: &mut [Api]) {
             if is_gzipped {
                 gunzipped = Vec::new();
                 let decode_result = GzDecoder::new(&mut gunzipped).write_all(memmap);
-                decode_result.map(|_| gunzipped.as_slice())
+                decode_result.map(|()| gunzipped.as_slice())
             } else {
                 Ok(memmap as &[u8])
             }
@@ -104,18 +104,16 @@ fn traverse<'a>(
 ) {
     match &node.kind {
         Clang::NamespaceDecl(decl) => {
-            let name = match &decl.name {
-                Some(name) => name,
+            let Some(name) = &decl.name else {
                 // Can ignore enums inside an anonymous namespace.
-                None => return,
+                return;
             };
             namespace.push(name);
             idx = None;
         }
         Clang::EnumDecl(decl) => {
-            let name = match &decl.name {
-                Some(name) => name,
-                None => return,
+            let Some(name) = &decl.name else {
+                return;
             };
             idx = None;
             for (i, enm) in variants_from_header.iter_mut().enumerate() {
@@ -127,19 +125,16 @@ fn traverse<'a>(
                         cx.error(span, msg);
                         return;
                     }
-                    let fixed_underlying_type = match &decl.fixed_underlying_type {
-                        Some(fixed_underlying_type) => fixed_underlying_type,
-                        None => {
-                            let span = &enm.variants_from_header_attr;
-                            let name = &enm.name.cxx;
-                            let qual_name = CxxName(&enm.name);
-                            let msg = format!(
-                                "implicit implementation-defined repr for enum {} is not supported yet; consider changing its C++ definition to `enum {}: int {{...}}",
-                                qual_name, name,
-                            );
-                            cx.error(span, msg);
-                            return;
-                        }
+                    let Some(fixed_underlying_type) = &decl.fixed_underlying_type else {
+                        let span = &enm.variants_from_header_attr;
+                        let name = &enm.name.cxx;
+                        let qual_name = CxxName(&enm.name);
+                        let msg = format!(
+                            "implicit implementation-defined repr for enum {} is not supported yet; consider changing its C++ definition to `enum {}: int {{...}}",
+                            qual_name, name,
+                        );
+                        cx.error(span, msg);
+                        return;
                     };
                     let repr = translate_qual_type(
                         cx,
@@ -165,17 +160,14 @@ fn traverse<'a>(
                     .variants_from_header_attr
                     .as_ref()
                     .unwrap()
-                    .path
+                    .path()
                     .get_ident()
                     .unwrap()
                     .span();
-                let cxx_name = match ForeignName::parse(&decl.name, span) {
-                    Ok(foreign_name) => foreign_name,
-                    Err(_) => {
-                        let span = &enm.variants_from_header_attr;
-                        let msg = format!("unsupported C++ variant name: {}", decl.name);
-                        return cx.error(span, msg);
-                    }
+                let Ok(cxx_name) = ForeignName::parse(&decl.name, span) else {
+                    let span = &enm.variants_from_header_attr;
+                    let msg = format!("unsupported C++ variant name: {}", decl.name);
+                    return cx.error(span, msg);
                 };
                 let rust_name: Ident = match syn::parse_str(&decl.name) {
                     Ok(ident) => ident,
@@ -259,7 +251,7 @@ fn translate_qual_type(cx: &mut Errors, enm: &Enum, qual_type: &str) -> Path {
         .variants_from_header_attr
         .as_ref()
         .unwrap()
-        .path
+        .path()
         .get_ident()
         .unwrap()
         .span();
@@ -277,7 +269,7 @@ enum ParsedDiscriminant {
 fn discriminant_value(mut clang: &[Node]) -> ParsedDiscriminant {
     if clang.is_empty() {
         // No discriminant expression provided; use successor of previous
-        // descriminant.
+        // discriminant.
         return ParsedDiscriminant::Successor;
     }
 
@@ -301,7 +293,7 @@ fn discriminant_value(mut clang: &[Node]) -> ParsedDiscriminant {
 fn span_for_enum_error(enm: &Enum) -> TokenStream {
     let enum_token = enm.enum_token;
     let mut brace_token = Group::new(Delimiter::Brace, TokenStream::new());
-    brace_token.set_span(enm.brace_token.span);
+    brace_token.set_span(enm.brace_token.span.join());
     quote!(#enum_token #brace_token)
 }
 
